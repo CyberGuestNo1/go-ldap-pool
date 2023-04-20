@@ -24,7 +24,8 @@ const (
 
 type PoolConnection struct {
 	*ldap.Conn
-	State PoolConnectionState
+	State     PoolConnectionState
+	idleStart time.Time
 
 	mx    sync.Mutex
 	Index int
@@ -40,6 +41,7 @@ func (pc *PoolConnection) SetState(state PoolConnectionState) {
 type Pool struct {
 	debug             bool
 	connectionTimeout time.Duration
+	idleTimeout       time.Duration
 
 	addr            string
 	bindCredentials *BindCredentials
@@ -106,6 +108,12 @@ func (p *Pool) newConn(i int) (*PoolConnection, error) {
 		log.Printf("initializing working connection at index %d", i)
 	}
 
+	pc.idleStart = time.Now().UTC()
+
+	if p.debug {
+		log.Printf("Creating connection. IdleStart: %s", pc.idleStart.Format(time.RFC3339))
+	}
+
 	return pc, nil
 }
 
@@ -140,6 +148,11 @@ func (p *Pool) pull() (*PoolConnection, error) {
 		return nil, fmt.Errorf("timeout while pulling connection")
 	}
 
+	pc.idleStart = time.Now().UTC()
+	if p.debug {
+		log.Printf("Pulling connection. IdleStart: %s", pc.idleStart.Format(time.RFC3339))
+	}
+
 	return pc, nil
 }
 
@@ -156,6 +169,15 @@ func (p *Pool) watcher(ctx context.Context) {
 				}
 
 				if conn.State == PoolConnectionBusy {
+					goto sleep
+				}
+
+				if p.idleTimeout != 0 && time.Now().UTC().After(conn.idleStart.Add(p.idleTimeout)) {
+					if p.debug {
+						log.Printf("Closing connection. IdleStart: %s", conn.idleStart.Format(time.RFC3339))
+					}
+					conn.Close()
+					conn = nil
 					goto sleep
 				}
 
@@ -181,6 +203,7 @@ type PoolOptions struct {
 	ConnectionsCount  int
 	ConnectionTimeout time.Duration
 	WakeupInterval    time.Duration
+	IdleTimeout       time.Duration
 }
 
 type BindCredentials struct {
@@ -201,10 +224,15 @@ func NewPool(ctx context.Context, po *PoolOptions) (*Pool, error) {
 		bindCredentials:   po.BindCredentials,
 		connsChan:         make(chan *PoolConnection, connectionsCount),
 		connectionTimeout: po.ConnectionTimeout,
+		idleTimeout:       po.IdleTimeout,
 	}
 
 	if pool.connectionTimeout == 0 {
 		pool.connectionTimeout = 10 * time.Second
+	}
+
+	if pool.idleTimeout == 0 {
+		pool.idleTimeout = 60 * time.Second
 	}
 
 	go pool.watcher(ctx)
