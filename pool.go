@@ -177,7 +177,7 @@ func (p *Pool) watcher(ctx context.Context) {
 						log.Printf("Closing connection. IdleStart: %s", conn.idleStart.Format(time.RFC3339))
 					}
 					conn.Close()
-					conn = nil
+					p.newConn(i)
 					goto sleep
 				}
 
