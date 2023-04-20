@@ -172,17 +172,14 @@ func (p *Pool) watcher(ctx context.Context) {
 					goto sleep
 				}
 
-				if p.idleTimeout != 0 && time.Now().UTC().After(conn.idleStart.Add(p.idleTimeout)) {
-					if p.debug {
-						log.Printf("Closing connection. IdleStart: %s", conn.idleStart.Format(time.RFC3339))
-					}
-					conn.mx.Lock()
-					conn.State = PoolConnectionUnavailable
-					conn.Close()
-					p.newConn(i)
-					conn.mx.Unlock()
-					goto sleep
-				}
+				// if p.idleTimeout != 0 && time.Now().UTC().After(conn.idleStart.Add(p.idleTimeout)) {
+				// 	if p.debug {
+				// 		log.Printf("Closing connection. IdleStart: %s", conn.idleStart.Format(time.RFC3339))
+				// 	}
+				// 	conn.Close()
+				// 	p.newConn(i)
+				// 	goto sleep
+				// }
 
 				err = p.heartbeat(conn)
 				if err != nil {
