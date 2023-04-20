@@ -176,9 +176,11 @@ func (p *Pool) watcher(ctx context.Context) {
 					if p.debug {
 						log.Printf("Closing connection. IdleStart: %s", conn.idleStart.Format(time.RFC3339))
 					}
+					conn.mx.Lock()
 					conn.State = PoolConnectionUnavailable
 					conn.Close()
 					p.newConn(i)
+					conn.mx.Unlock()
 					goto sleep
 				}
 
