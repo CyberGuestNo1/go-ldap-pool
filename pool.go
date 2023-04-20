@@ -101,9 +101,6 @@ func (p *Pool) newConn(i int) (*PoolConnection, error) {
 		Index: i,
 	}
 
-	p.conns[i] = pc
-	p.connsChan <- pc
-
 	if p.debug {
 		log.Printf("initializing working connection at index %d", i)
 	}
@@ -164,7 +161,9 @@ func (p *Pool) watcher(ctx context.Context) {
 				conn := p.conns[i]
 
 				if conn == nil {
-					p.newConn(i)
+					pc, _ := p.newConn(i)
+					p.conns[i] = pc
+					p.connsChan <- pc
 					goto sleep
 				}
 
@@ -177,13 +176,18 @@ func (p *Pool) watcher(ctx context.Context) {
 						log.Printf("Closing connection. IdleStart: %s", conn.idleStart.Format(time.RFC3339))
 					}
 					conn.State = PoolConnectionUnavailable
-					p.newConn(i)
+					pc, _ := p.newConn(i)
+					p.conns[i] = pc
+					p.connsChan <- pc
+					conn.Close()
 					goto sleep
 				}
 
 				err = p.heartbeat(conn)
 				if err != nil {
-					p.newConn(i)
+					pc, _ := p.newConn(i)
+					p.conns[i] = pc
+					p.connsChan <- pc
 					goto sleep
 				}
 
