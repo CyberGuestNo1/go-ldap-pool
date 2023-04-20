@@ -1,4 +1,4 @@
-module github.com/m-vinc/go-ldap-pool
+module github.com/cyberguestno1/go-ldap-pool
 
 go 1.17
 
